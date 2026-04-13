@@ -1,0 +1,86 @@
+{
+  "format": 1,
+  "restore": {
+    "/home/deltawing/RiderProjects/NOFFB2/NOFFB2/NOFFB2.csproj": {}
+  },
+  "projects": {
+    "/home/deltawing/RiderProjects/NOFFB2/NOFFB2/NOFFB2.csproj": {
+      "version": "0.1.0",
+      "restore": {
+        "projectUniqueName": "/home/deltawing/RiderProjects/NOFFB2/NOFFB2/NOFFB2.csproj",
+        "projectName": "NOFFB2",
+        "projectPath": "/home/deltawing/RiderProjects/NOFFB2/NOFFB2/NOFFB2.csproj",
+        "packagesPath": "/home/deltawing/.nuget/packages/",
+        "outputPath": "/home/deltawing/RiderProjects/NOFFB2/NOFFB2/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/home/deltawing/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net48"
+        ],
+        "sources": {
+          "/home/deltawing/MyLocalNugetSource": {},
+          "/home/deltawing/RiderProjects/JoltPhysicsSharp-Vrage/artifacts/package/release": {},
+          "/usr/lib/dotnet/library-packs": {},
+          "https://api.nuget.org/v3/index.json": {},
+          "https://api.nuget.org/v3/index.json": {},
+          "https://nuget.bepinex.dev/v3/index.json": {},
+          "https://nuget.samboy.dev/v3/index.json": {}
+        },
+        "frameworks": {
+          "net48": {
+            "targetAlias": "net48",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "10.0.100"
+      },
+      "frameworks": {
+        "net48": {
+          "targetAlias": "net48",
+          "dependencies": {
+            "BepInEx.Analyzers": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.*, )"
+            },
+            "BepInEx.Core": {
+              "target": "Package",
+              "version": "[5.*, )"
+            },
+            "BepInEx.PluginInfoProps": {
+              "target": "Package",
+              "version": "[2.*, )"
+            },
+            "Microsoft.NETFramework.ReferenceAssemblies": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.0.2, )"
+            },
+            "SharpDX.DirectInput": {
+              "target": "Package",
+              "version": "[4.2.0, )"
+            },
+            "UnityEngine.Modules": {
+              "include": "Compile",
+              "target": "Package",
+              "version": "[5.6.0, )"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/10.0.104/RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

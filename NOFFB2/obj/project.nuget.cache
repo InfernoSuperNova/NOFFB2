@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "dgSpecHash": "SpiUov1m08o=",
+  "success": true,
+  "projectFilePath": "/home/deltawing/RiderProjects/NOFFB2/NOFFB2/NOFFB2.csproj",
+  "expectedPackageFiles": [
+    "/home/deltawing/.nuget/packages/bepinex.analyzers/1.0.8/bepinex.analyzers.1.0.8.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/bepinex.baselib/5.4.20/bepinex.baselib.5.4.20.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/bepinex.core/5.4.21/bepinex.core.5.4.21.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/bepinex.plugininfoprops/2.1.0/bepinex.plugininfoprops.2.1.0.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/harmonyx/2.7.0/harmonyx.2.7.0.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/microsoft.netframework.referenceassemblies/1.0.2/microsoft.netframework.referenceassemblies.1.0.2.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/microsoft.netframework.referenceassemblies.net48/1.0.2/microsoft.netframework.referenceassemblies.net48.1.0.2.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/mono.cecil/0.11.4/mono.cecil.0.11.4.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/monomod.runtimedetour/21.12.13.1/monomod.runtimedetour.21.12.13.1.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/monomod.utils/21.12.13.1/monomod.utils.21.12.13.1.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/sharpdx/4.2.0/sharpdx.4.2.0.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/sharpdx.directinput/4.2.0/sharpdx.directinput.4.2.0.nupkg.sha512",
+    "/home/deltawing/.nuget/packages/unityengine.modules/5.6.0/unityengine.modules.5.6.0.nupkg.sha512"
+  ],
+  "logs": []
+}
