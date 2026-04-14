@@ -1,0 +1,16 @@
+.idea/
+.vs/
+LocalPaths.props
+
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+**/bin/
+**/obj/
+
+*.dll
+*.pdb
+*.cache

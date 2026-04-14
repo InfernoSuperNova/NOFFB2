@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+    <Import Project="LocalPaths.props" Condition="Exists('LocalPaths.props')" />
+
     <PropertyGroup>
         <TargetFramework>net48</TargetFramework>
         <AssemblyName>NOFFB2</AssemblyName>
@@ -13,6 +15,24 @@
             https://nuget.samboy.dev/v3/index.json
         </RestoreAdditionalProjectSources>
         <RootNamespace>NOFFB2</RootNamespace>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <NuclearOptionGameDirResolved Condition="'$(NuclearOptionGameDirResolved)' == '' AND '$(NuclearOptionGameDir)' != ''">$(NuclearOptionGameDir)</NuclearOptionGameDirResolved>
+        <NuclearOptionGameDirResolved Condition="'$(NuclearOptionGameDirResolved)' == '' AND '$(NUCLEAR_OPTION_GAME_DIR)' != ''">$(NUCLEAR_OPTION_GAME_DIR)</NuclearOptionGameDirResolved>
+
+        <NuclearOptionGameDirResolved Condition="'$(NuclearOptionGameDirResolved)' == '' AND Exists('$(HOME)/.steam/steam/steamapps/common/Nuclear Option/NuclearOption_Data/Managed')">$(HOME)/.steam/steam/steamapps/common/Nuclear Option</NuclearOptionGameDirResolved>
+        <NuclearOptionGameDirResolved Condition="'$(NuclearOptionGameDirResolved)' == '' AND Exists('$(HOME)/.steam/debian-installation/steamapps/common/Nuclear Option/NuclearOption_Data/Managed')">$(HOME)/.steam/debian-installation/steamapps/common/Nuclear Option</NuclearOptionGameDirResolved>
+        <NuclearOptionGameDirResolved Condition="'$(NuclearOptionGameDirResolved)' == '' AND Exists('$(HOME)/.local/share/Steam/steamapps/common/Nuclear Option/NuclearOption_Data/Managed')">$(HOME)/.local/share/Steam/steamapps/common/Nuclear Option</NuclearOptionGameDirResolved>
+
+        <NuclearOptionGameDirResolved Condition="'$(NuclearOptionGameDirResolved)' == '' AND Exists('C:\Program Files (x86)\Steam\steamapps\common\Nuclear Option\NuclearOption_Data\Managed')">C:\Program Files (x86)\Steam\steamapps\common\Nuclear Option</NuclearOptionGameDirResolved>
+        <NuclearOptionGameDirResolved Condition="'$(NuclearOptionGameDirResolved)' == '' AND Exists('C:\Program Files\Steam\steamapps\common\Nuclear Option\NuclearOption_Data\Managed')">C:\Program Files\Steam\steamapps\common\Nuclear Option</NuclearOptionGameDirResolved>
+        <NuclearOptionGameDirResolved Condition="'$(NuclearOptionGameDirResolved)' == '' AND Exists('D:\SteamLibrary\steamapps\common\Nuclear Option\NuclearOption_Data\Managed')">D:\SteamLibrary\steamapps\common\Nuclear Option</NuclearOptionGameDirResolved>
+
+        <NuclearOptionGameDirResolved Condition="'$(NuclearOptionGameDirResolved)' == ''">NUCLEAR_OPTION_NOT_FOUND</NuclearOptionGameDirResolved>
+
+        <NuclearOptionManagedDir>$(NuclearOptionGameDirResolved)/NuclearOption_Data/Managed</NuclearOptionManagedDir>
+        <NuclearOptionPluginDir Condition="'$(NuclearOptionPluginDir)' == '' AND '$(NuclearOptionGameDirResolved)' != 'NUCLEAR_OPTION_NOT_FOUND'">$(NuclearOptionGameDirResolved)/BepInEx/plugins/NOFFB2</NuclearOptionPluginDir>
     </PropertyGroup>
 
     <ItemGroup>
@@ -29,16 +49,20 @@
     
     <ItemGroup>
         <Reference Include="Assembly-CSharp">
-            <HintPath>/home/deltawing/.steam/debian-installation/steamapps/common/Nuclear Option/NuclearOption_Data/Managed/Assembly-CSharp.dll</HintPath>
+            <HintPath>$(NuclearOptionManagedDir)/Assembly-CSharp.dll</HintPath>
             <Private>false</Private>
         </Reference>
     </ItemGroup>
 
-    <PropertyGroup>
-        <NuclearOptionPluginDir>/home/deltawing/.steam/debian-installation/steamapps/common/Nuclear Option/BepInEx/plugins/NOFFB2</NuclearOptionPluginDir>
-    </PropertyGroup>
+    <Target Name="ValidateNuclearOptionPath" BeforeTargets="ResolveReferences">
+        <Error Condition="'$(NuclearOptionGameDirResolved)' == 'NUCLEAR_OPTION_NOT_FOUND'"
+               Text="Nuclear Option installation not found!%0APlease either:%0A  1. Create LocalPaths.props and set NuclearOptionGameDir, OR%0A  2. Set the NUCLEAR_OPTION_GAME_DIR environment variable" />
+        <Message Text="Using Nuclear Option from: $(NuclearOptionGameDirResolved)" Importance="high" />
+    </Target>
 
     <Target Name="CopyPluginToNuclearOption" AfterTargets="Build">
+        <Error Condition="'$(NuclearOptionPluginDir)' == ''"
+               Text="NuclearOptionPluginDir is not set. Set it in LocalPaths.props if you want to copy the plugin after build." />
         <MakeDir Directories="$(NuclearOptionPluginDir)" />
         <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(NuclearOptionPluginDir)" />
         <Copy SourceFiles="$(TargetDir)$(TargetName).pdb"

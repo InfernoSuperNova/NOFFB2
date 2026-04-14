@@ -101,15 +101,15 @@ public class Plugin : BaseUnityPlugin
             // Rough haptic adaptation of the first 9 notes.
             var notes = new (float Frequency, float Duration, float Amplitude, int DelayMs)[]
             {
-                (196.00f, 0.25f, 0.2f,   0),  // G3
-                (196.00f, 0.25f, 0.2f, 300),  // G3
-                (196.00f, 0.25f, 0.2f, 300),  // G3
-                (155.56f, 0.20f, 0.16f, 300),  // Eb3
-                (233.08f, 0.10f, 0.24f, 200),  // Bb3
-                (196.00f, 0.25f, 0.2f, 150),  // G3
-                (155.56f, 0.20f, 0.16f, 300),  // Eb3
-                (233.08f, 0.10f, 0.24f, 200),  // Bb3
-                (196.00f, 0.50f, 0.2f, 150),  // G3
+                (196.00f, 0.25f, 0.8f,   0),  // G3
+                (196.00f, 0.25f, 0.8f, 300),  // G3
+                (196.00f, 0.25f, 0.8f, 300),  // G3
+                (155.56f, 0.20f, 0.64f, 300),  // Eb3
+                (233.08f, 0.10f, 0.96f, 200),  // Bb3
+                (196.00f, 0.25f, 0.8f, 150),  // G3
+                (155.56f, 0.20f, 0.64f, 300),  // Eb3
+                (233.08f, 0.10f, 0.96f, 200),  // Bb3
+                (196.00f, 0.50f, 0.8f, 150),  // G3
             };
 
             foreach (var note in notes)
