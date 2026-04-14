@@ -9,19 +9,21 @@ public abstract class FFEffect
     private long _duration = 0;
     private float _durationSeconds = 0;
 
-    private bool _continuous = false;
+    
     
     public FFEffect(float durationSeconds)
     {
         _durationSeconds = durationSeconds;
     }
-    public long KillTime => _continuous ? long.MaxValue : _startTime + _duration;
+
+    public bool Continuous { get; private set; }
+    public long KillTime => Continuous ? long.MaxValue : _startTime + _duration;
 
 
 
     public void Start(long elapsed, bool continuous)
     {
-        _continuous = continuous;
+        Continuous = continuous;
         _startTime = elapsed;
         _duration = (long)(_durationSeconds * Stopwatch.Frequency);
     }

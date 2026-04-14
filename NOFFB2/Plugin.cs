@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections;
 using BepInEx;
+using BepInEx.Bootstrap;
 using BepInEx.Logging;
-using System.Threading;
+using HarmonyLib;
 using UnityEngine;
 
 namespace NOFFB2;
@@ -9,10 +11,21 @@ namespace NOFFB2;
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
 public class Plugin : BaseUnityPlugin
 {
+    private const bool RunStartupAxisIndependenceTest = false;
+    private const float AxisTestDelaySeconds = 2f;
+    private const float AxisTestForce = 0.35f;
+    private const float AxisTestDurationSeconds = 1.25f;
+    private const float AxisTestGapSeconds = 1.5f;
+
     internal static new ManualLogSource Logger;
     private static FFServer _ffserver;
+    private static AircraftForceManager _aircraftForceManager;
+    private static Harmony _harmony;
+    
     private static bool _applicationQuitting;
     public System.Random RNG;
+    public Action UpdateDispatcher;
+    private bool _loggedUpdateLoopStart;
 
     public static Plugin I;
 
@@ -27,23 +40,99 @@ public class Plugin : BaseUnityPlugin
         }
 
         Logger = base.Logger;
-        DontDestroyOnLoad(gameObject);
+        PreserveChainloaderManagerObject();
         Logger.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} is loading");
+
         I = this;
         _applicationQuitting = false;
         RNG = new System.Random();
 
-        if (_ffserver == null)
+        EnsureHarmonyPatched();
+        EnsureForceFeedbackServer();
+        StartAxisIndependenceTestIfEnabled();
+        EnsureAircraftForceManager();
+
+        Logger.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} is loaded");
+    }
+
+    private static void PreserveChainloaderManagerObject()
+    {
+        var managerObject = Chainloader.ManagerObject;
+        if (managerObject == null)
         {
-            _ffserver = new FFServer();
-            _ffserver.Start();
+            return;
         }
 
-        MarchOfTheSith();
-        //GunsTest();
-        //_ffserver.PlayNativeSine(0.1f, 20, 0.2f);
-        
-        Logger.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} is loaded");
+        managerObject.hideFlags = HideFlags.HideAndDontSave;
+        DontDestroyOnLoad(managerObject);
+        Logger?.LogWarning("Force Hide ManagerGameObject");
+    }
+
+    private static void EnsureHarmonyPatched()
+    {
+        if (_harmony != null)
+        {
+            return;
+        }
+
+        _harmony = new Harmony(MyPluginInfo.PLUGIN_GUID);
+        _harmony.PatchAll();
+        Logger?.LogInfo("Harmony patches applied.");
+    }
+
+    private static void EnsureForceFeedbackServer()
+    {
+        if (_ffserver != null)
+        {
+            return;
+        }
+
+        _ffserver = new FFServer();
+        _ffserver.Start();
+    }
+
+    private void StartAxisIndependenceTestIfEnabled()
+    {
+        if (!RunStartupAxisIndependenceTest)
+        {
+            return;
+        }
+
+        StartCoroutine(RunAxisIndependenceTest());
+    }
+
+    private IEnumerator RunAxisIndependenceTest()
+    {
+        yield return new WaitForSeconds(AxisTestDelaySeconds);
+
+        yield return RunAxisTestStep(FFAxis.Roll, "ROLL");
+        yield return new WaitForSeconds(AxisTestGapSeconds);
+        yield return RunAxisTestStep(FFAxis.Pitch, "PITCH");
+    }
+
+    private IEnumerator RunAxisTestStep(FFAxis axis, string label)
+    {
+        Logger?.LogInfo($"Starting axis independence test for {label}: force={AxisTestForce:F2} duration={AxisTestDurationSeconds:F2}s");
+        if (axis == FFAxis.Roll)
+        {
+            _ffserver?.PlayNativeConstantVector(AxisTestDurationSeconds, AxisTestForce, 0f);
+        }
+        else
+        {
+            _ffserver?.PlayNativeConstantVector(AxisTestDurationSeconds, 0f, AxisTestForce);
+        }
+        yield return new WaitForSeconds(AxisTestDurationSeconds);
+        Logger?.LogInfo($"Completed axis independence test for {label}");
+    }
+
+    private void EnsureAircraftForceManager()
+    {
+        if (_aircraftForceManager != null)
+        {
+            return;
+        }
+
+        _aircraftForceManager = new AircraftForceManager(this);
     }
 
     private void OnEnable()
@@ -66,6 +155,8 @@ public class Plugin : BaseUnityPlugin
 
         if (_applicationQuitting)
         {
+            _harmony?.UnpatchSelf();
+            _harmony = null;
             _ffserver?.Stop();
             _ffserver = null;
         }
@@ -77,51 +168,25 @@ public class Plugin : BaseUnityPlugin
         _applicationQuitting = true;
     }
 
-
-    private void GunsTest()
+    private void Update()
     {
-        ThreadPool.QueueUserWorkItem(_ =>
+        if (!_loggedUpdateLoopStart)
         {
-            while (true)
-            {
+            Logger?.LogInfo("Plugin Update loop is running.");
+            _loggedUpdateLoopStart = true;
+        }
 
-                _ffserver?.AddEffect(new FFDecayingSine(0.1f, 20, 0.1f));
-                Thread.Sleep(50);
-            }
-
-        });
-
+        try
+        {
+            UpdateDispatcher?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError($"Unhandled exception in UpdateDispatcher: {ex}");
+        }
     }
+
+    public static void Log(object log, LogLevel logLevel = LogLevel.Info) => Logger.Log(logLevel, $"{MyPluginInfo.PLUGIN_GUID} : {log}");
     
-
-    private void MarchOfTheSith()
-    {
-        ThreadPool.QueueUserWorkItem(_ =>
-        {
-            // Rough haptic adaptation of the first 9 notes.
-            var notes = new (float Frequency, float Duration, float Amplitude, int DelayMs)[]
-            {
-                (196.00f, 0.25f, 0.8f,   0),  // G3
-                (196.00f, 0.25f, 0.8f, 300),  // G3
-                (196.00f, 0.25f, 0.8f, 300),  // G3
-                (155.56f, 0.20f, 0.64f, 300),  // Eb3
-                (233.08f, 0.10f, 0.96f, 200),  // Bb3
-                (196.00f, 0.25f, 0.8f, 150),  // G3
-                (155.56f, 0.20f, 0.64f, 300),  // Eb3
-                (233.08f, 0.10f, 0.96f, 200),  // Bb3
-                (196.00f, 0.50f, 0.8f, 150),  // G3
-            };
-
-            foreach (var note in notes)
-            {
-                if (note.DelayMs > 0)
-                {
-                    Thread.Sleep(note.DelayMs);
-                }
-
-                //_ffserver?.AddEffect(new FFDecayingSine(note.Duration, note.Frequency, note.Amplitude));
-                _ffserver.PlayNativeSine(note.Duration, note.Frequency, note.Amplitude);
-            }
-        });
-    }
+    
 }

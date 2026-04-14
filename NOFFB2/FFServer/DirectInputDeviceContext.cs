@@ -8,6 +8,22 @@ namespace NOFFB2;
 
 internal sealed class DirectInputDeviceContext : IDisposable
 {
+    internal sealed class AxisBinding
+    {
+        public AxisBinding(FFAxis axis, int[] effectAxes, int[] effectDirections, string actuatorName)
+        {
+            Axis = axis;
+            EffectAxes = effectAxes;
+            EffectDirections = effectDirections;
+            ActuatorName = actuatorName;
+        }
+
+        public FFAxis Axis { get; }
+        public int[] EffectAxes { get; }
+        public int[] EffectDirections { get; }
+        public string ActuatorName { get; }
+    }
+
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
@@ -21,26 +37,19 @@ internal sealed class DirectInputDeviceContext : IDisposable
         Joystick device,
         string deviceName,
         List<EffectInfo> supportedEffects,
-        int[] effectAxes,
-        int[] effectDirections)
+        IReadOnlyDictionary<FFAxis, AxisBinding> axisBindings)
     {
         _directInput = directInput;
         Device = device;
         DeviceName = deviceName;
         SupportedEffects = supportedEffects;
-        EffectAxes = effectAxes;
-        EffectDirections = effectDirections;
+        AxisBindings = axisBindings;
     }
 
     public Joystick Device { get; }
-
     public string DeviceName { get; }
-
     public IReadOnlyList<EffectInfo> SupportedEffects { get; }
-
-    public int[] EffectAxes { get; }
-
-    public int[] EffectDirections { get; }
+    public IReadOnlyDictionary<FFAxis, AxisBinding> AxisBindings { get; }
 
     public bool SupportsEffect(Guid effectGuid)
     {
@@ -54,6 +63,8 @@ internal sealed class DirectInputDeviceContext : IDisposable
 
         return false;
     }
+
+    public bool TryGetAxisBinding(FFAxis axis, out AxisBinding binding) => AxisBindings.TryGetValue(axis, out binding);
 
     public static DirectInputDeviceContext TryCreate()
     {
@@ -111,9 +122,6 @@ internal sealed class DirectInputDeviceContext : IDisposable
                 var actuators = new List<DeviceObjectInstance>();
                 foreach (var obj in allObjects)
                 {
-                    Plugin.Logger?.LogInfo(
-                        $"`{instance.InstanceName}` object: Name={obj.Name}, Offset={obj.Offset}, ObjectId={obj.ObjectId}, TypeGuid={obj.ObjectType}");
-
                     if (IsProbableActuator(obj))
                     {
                         actuators.Add(obj);
@@ -184,15 +192,22 @@ internal sealed class DirectInputDeviceContext : IDisposable
                     Plugin.Logger?.LogWarning($"Failed to enable FF actuators on `{instance.InstanceName}`: {ex.Message}");
                 }
 
+                var axisBindings = CreateAxisBindings(actuators);
+                if (axisBindings.Count == 0)
+                {
+                    Plugin.Logger?.LogWarning($"`{instance.InstanceName}` has FF support but no usable axis bindings.");
+                    candidate.Dispose();
+                    continue;
+                }
+
                 var context = new DirectInputDeviceContext(
                     directInput,
                     candidate,
                     instance.InstanceName,
                     supportedEffects,
-                    new[] { (int)actuators[0].ObjectId },
-                    new[] { 0 });
+                    axisBindings);
 
-                context.LogSelection(actuators);
+                context.LogSelection();
                 return context;
             }
             catch (Exception ex)
@@ -207,19 +222,50 @@ internal sealed class DirectInputDeviceContext : IDisposable
         return null;
     }
 
-    private void LogSelection(List<DeviceObjectInstance> actuators)
+    private void LogSelection()
     {
         Plugin.Logger?.LogInfo($"Selected DirectInput device: `{DeviceName}`");
-        for (var index = 0; index < actuators.Count; index++)
+        foreach (var kvp in AxisBindings)
         {
-            var actuator = actuators[index];
-            Plugin.Logger?.LogInfo($"Actuator[{index}] Name={actuator.Name} ObjectId={actuator.ObjectId} Offset={actuator.Offset} TypeFlags={actuator.ObjectType}");
+            var binding = kvp.Value;
+            Plugin.Logger?.LogInfo(
+                $"AxisBinding[{binding.Axis}] Actuator={binding.ActuatorName} Axes=[{string.Join(",", binding.EffectAxes)}] Directions=[{string.Join(",", binding.EffectDirections)}]");
         }
 
         foreach (var effectInfo in SupportedEffects)
         {
             Plugin.Logger?.LogInfo($"Supported FF effect: {effectInfo.Name} Guid={effectInfo.Guid}");
         }
+    }
+
+    private static Dictionary<FFAxis, AxisBinding> CreateAxisBindings(IReadOnlyList<DeviceObjectInstance> actuators)
+    {
+        var axisBindings = new Dictionary<FFAxis, AxisBinding>();
+
+        if (actuators.Count >= 1)
+        {
+            axisBindings[FFAxis.Roll] = CreateBinding(FFAxis.Roll, actuators[0]);
+        }
+
+        if (actuators.Count >= 2)
+        {
+            axisBindings[FFAxis.Pitch] = CreateBinding(FFAxis.Pitch, actuators[1]);
+        }
+        else if (actuators.Count >= 1)
+        {
+            axisBindings[FFAxis.Pitch] = CreateBinding(FFAxis.Pitch, actuators[0]);
+        }
+
+        return axisBindings;
+    }
+
+    private static AxisBinding CreateBinding(FFAxis axis, DeviceObjectInstance actuator)
+    {
+        return new AxisBinding(
+            axis,
+            new[] { (int)actuator.ObjectId },
+            new[] { 10_000 },
+            actuator.Name ?? actuator.ObjectId.ToString());
     }
 
     private static IntPtr GetCooperativeWindow()
