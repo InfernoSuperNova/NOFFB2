@@ -3,11 +3,37 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using SharpDX.DirectInput;
+using UnityEngine;
 
 namespace NOFFB2;
 
 internal sealed class DirectInputDeviceContext : IDisposable
 {
+    internal readonly struct AxisDebugSnapshot
+    {
+        public AxisDebugSnapshot(float x, float y, float z, float rotationX, float rotationY, float rotationZ)
+        {
+            X = x;
+            Y = y;
+            Z = z;
+            RotationX = rotationX;
+            RotationY = rotationY;
+            RotationZ = rotationZ;
+        }
+
+        public float X { get; }
+        public float Y { get; }
+        public float Z { get; }
+        public float RotationX { get; }
+        public float RotationY { get; }
+        public float RotationZ { get; }
+
+        public override string ToString()
+        {
+            return $"X={X:F3} Y={Y:F3} Z={Z:F3} RotX={RotationX:F3} RotY={RotationY:F3} RotZ={RotationZ:F3}";
+        }
+    }
+
     internal sealed class AxisBinding
     {
         public AxisBinding(FFAxis axis, int[] effectAxes, int[] effectDirections, string actuatorName)
@@ -65,6 +91,57 @@ internal sealed class DirectInputDeviceContext : IDisposable
     }
 
     public bool TryGetAxisBinding(FFAxis axis, out AxisBinding binding) => AxisBindings.TryGetValue(axis, out binding);
+
+    public bool TryGetAxisPosition(FFAxis axis, out float normalizedPosition)
+    {
+        normalizedPosition = 0f;
+
+        if (!AxisBindings.TryGetValue(axis, out var binding))
+        {
+            return false;
+        }
+
+        try
+        {
+            Device.Poll();
+            var state = Device.GetCurrentState();
+            normalizedPosition = NormalizeAxisValue(GetAxisValue(state, binding.ActuatorName));
+            if (axis == FFAxis.Roll)
+            {
+                normalizedPosition = -normalizedPosition;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Plugin.Logger?.LogWarning($"Failed reading DirectInput axis position for {axis} on `{DeviceName}`: {ex.Message}");
+            return false;
+        }
+    }
+
+    public bool TryGetAxisDebugSnapshot(out AxisDebugSnapshot snapshot)
+    {
+        snapshot = default;
+
+        try
+        {
+            Device.Poll();
+            var state = Device.GetCurrentState();
+            snapshot = new AxisDebugSnapshot(
+                NormalizeAxisValue(state.X),
+                NormalizeAxisValue(state.Y),
+                NormalizeAxisValue(state.Z),
+                NormalizeAxisValue(state.RotationX),
+                NormalizeAxisValue(state.RotationY),
+                NormalizeAxisValue(state.RotationZ));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Plugin.Logger?.LogWarning($"Failed reading DirectInput debug axis snapshot on `{DeviceName}`: {ex.Message}");
+            return false;
+        }
+    }
 
     public static DirectInputDeviceContext TryCreate()
     {
@@ -266,6 +343,25 @@ internal sealed class DirectInputDeviceContext : IDisposable
             new[] { (int)actuator.ObjectId },
             new[] { 10_000 },
             actuator.Name ?? actuator.ObjectId.ToString());
+    }
+
+    private static int GetAxisValue(JoystickState state, string actuatorName)
+    {
+        return actuatorName switch
+        {
+            "X Axis" => state.X,
+            "Y Axis" => state.Y,
+            "Z Axis" => state.Z,
+            "Rotation X" => state.RotationX,
+            "Rotation Y" => state.RotationY,
+            "Rotation Z" => state.RotationZ,
+            _ => actuatorName.IndexOf("Y Axis", StringComparison.OrdinalIgnoreCase) >= 0 ? state.Y : state.X
+        };
+    }
+
+    private static float NormalizeAxisValue(int rawValue)
+    {
+        return Mathf.Clamp(((rawValue / 65535f) * 2f) - 1f, -1f, 1f);
     }
 
     private static IntPtr GetCooperativeWindow()

@@ -14,6 +14,7 @@ public sealed class GunForces
 
     public void SetAircraft(Aircraft aircraft)
     {
+        if (aircraft == null) return;
         if (ReferenceEquals(_aircraft, aircraft))
         {
             return;

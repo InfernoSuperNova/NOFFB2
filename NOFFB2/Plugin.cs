@@ -11,11 +11,6 @@ namespace NOFFB2;
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
 public class Plugin : BaseUnityPlugin
 {
-    private const bool RunStartupAxisIndependenceTest = false;
-    private const float AxisTestDelaySeconds = 2f;
-    private const float AxisTestForce = 0.35f;
-    private const float AxisTestDurationSeconds = 1.25f;
-    private const float AxisTestGapSeconds = 1.5f;
 
     internal static new ManualLogSource Logger;
     private static FFServer _ffserver;
@@ -25,6 +20,7 @@ public class Plugin : BaseUnityPlugin
     private static bool _applicationQuitting;
     public System.Random RNG;
     public Action UpdateDispatcher;
+    public Action FixedUpdateDispatcher;
     private bool _loggedUpdateLoopStart;
 
     public static Plugin I;
@@ -49,8 +45,8 @@ public class Plugin : BaseUnityPlugin
 
         EnsureHarmonyPatched();
         EnsureForceFeedbackServer();
-        StartAxisIndependenceTestIfEnabled();
         EnsureAircraftForceManager();
+
 
         Logger.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} is loaded");
     }
@@ -89,40 +85,6 @@ public class Plugin : BaseUnityPlugin
 
         _ffserver = new FFServer();
         _ffserver.Start();
-    }
-
-    private void StartAxisIndependenceTestIfEnabled()
-    {
-        if (!RunStartupAxisIndependenceTest)
-        {
-            return;
-        }
-
-        StartCoroutine(RunAxisIndependenceTest());
-    }
-
-    private IEnumerator RunAxisIndependenceTest()
-    {
-        yield return new WaitForSeconds(AxisTestDelaySeconds);
-
-        yield return RunAxisTestStep(FFAxis.Roll, "ROLL");
-        yield return new WaitForSeconds(AxisTestGapSeconds);
-        yield return RunAxisTestStep(FFAxis.Pitch, "PITCH");
-    }
-
-    private IEnumerator RunAxisTestStep(FFAxis axis, string label)
-    {
-        Logger?.LogInfo($"Starting axis independence test for {label}: force={AxisTestForce:F2} duration={AxisTestDurationSeconds:F2}s");
-        if (axis == FFAxis.Roll)
-        {
-            _ffserver?.PlayNativeConstantVector(AxisTestDurationSeconds, AxisTestForce, 0f);
-        }
-        else
-        {
-            _ffserver?.PlayNativeConstantVector(AxisTestDurationSeconds, 0f, AxisTestForce);
-        }
-        yield return new WaitForSeconds(AxisTestDurationSeconds);
-        Logger?.LogInfo($"Completed axis independence test for {label}");
     }
 
     private void EnsureAircraftForceManager()
@@ -180,6 +142,18 @@ public class Plugin : BaseUnityPlugin
         {
             UpdateDispatcher?.Invoke();
         }
+        catch (Exception ex)
+        {
+            Logger?.LogError($"Unhandled exception in UpdateDispatcher: {ex}");
+        }
+    }
+
+    private void FixedUpdate()
+    {
+        try
+        {
+            FixedUpdateDispatcher?.Invoke();
+        }   
         catch (Exception ex)
         {
             Logger?.LogError($"Unhandled exception in UpdateDispatcher: {ex}");

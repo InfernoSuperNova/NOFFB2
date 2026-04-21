@@ -60,6 +60,10 @@
             <HintPath>$(NuclearOptionManagedDir)/UnityEngine.dll</HintPath>
             <Private>false</Private>
         </Reference>
+        <Reference Include="UnityEngine.PhysicsModule">
+            <HintPath>$(NuclearOptionManagedDir)/UnityEngine.PhysicsModule.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
         <Reference Include="UnityEngine.CoreModule">
             <HintPath>$(NuclearOptionManagedDir)/UnityEngine.CoreModule.dll</HintPath>
             <Private>false</Private>

@@ -38,7 +38,7 @@ public sealed class FFPerlinEffect : FFEffect
         }
     }
 
-    public override float Calculate(long elapsed)
+    public override float Calculate(long elapsed, float currentPos)
     {
         var force = ActualCalculate(elapsed);
         return force * 3; // TODO: Make this a config constant that can be changed by the user

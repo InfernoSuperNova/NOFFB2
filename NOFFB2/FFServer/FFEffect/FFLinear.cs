@@ -16,8 +16,13 @@ public class FFLinear : FFEffect
         _force = force;
     }
 
-    public override float Calculate(long elapsed)
+    public override float Calculate(long elapsed, float currentPos)
     {
         return _force;
+    }
+
+    public void SetForce(float newForce)
+    {
+        _force = newForce;
     }
 }

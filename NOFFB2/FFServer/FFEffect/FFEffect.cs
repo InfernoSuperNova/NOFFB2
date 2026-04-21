@@ -44,5 +44,5 @@ public abstract class FFEffect
         return (float)(currentTicks - _startTime) / Stopwatch.Frequency;
     }
 
-    public abstract float Calculate(long elapsed);
+    public abstract float Calculate(long elapsed, float currentPos);
 }

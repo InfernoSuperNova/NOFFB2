@@ -11,25 +11,34 @@ public class AircraftForceManager
     private readonly Plugin _plugin;
     private readonly Dictionary<FFAxis, FFPerlinEffect> _cameraShakeEffects = new();
     private readonly GunForces _gunForces = new();
+    private readonly LandingGearForces _landingGearForces = new();
+    private readonly JerkForces _jerkForces;
+    private readonly AeroForces _aeroForces;
     private bool _loggedFirstUpdate;
 
     public AircraftForceManager(Plugin plugin)
     {
         _plugin = plugin;
         _plugin.UpdateDispatcher += Update;
+        _plugin.FixedUpdateDispatcher += FixedUpdate;
         foreach (FFAxis axis in Enum.GetValues(typeof(FFAxis)))
         {
             var effect = new FFPerlinEffect();
             _cameraShakeEffects[axis] = effect;
             FFServer.I.AddContinuousEffect(effect, axis);
         }
-        
+        _landingGearForces.Init();
+        _jerkForces = new(this);
+        _jerkForces.Init();
+        _aeroForces = new (this);
+        _aeroForces.Init();
         Log("Initialized");
         I = this;
     }
 
     public static AircraftForceManager I { get; private set; }
     public bool AircraftValid => _aircraft != null;
+    public Aircraft Aircraft => _aircraft;
 
     private void Update()
     {
@@ -38,10 +47,15 @@ public class AircraftForceManager
             Log("First manager update");
             _loggedFirstUpdate = true;
         }
+    }
 
+    private void FixedUpdate()
+    {
         _oldAircraft = _aircraft;
         GameManager.GetLocalAircraft(out _aircraft);
         if (_aircraft != _oldAircraft) OnAircraftChanged();
+        _jerkForces.FixedUpdate();
+        _aeroForces.FixedUpdate();
     }
 
     private void OnAircraftChanged()
@@ -60,6 +74,8 @@ public class AircraftForceManager
         }
 
         _gunForces.SetAircraft(_aircraft);
+        _landingGearForces.SetAircraft(_aircraft);
+        _aeroForces.AircraftChanged();
     }
 
     public void OnShake(Aircraft.OnShake shake)

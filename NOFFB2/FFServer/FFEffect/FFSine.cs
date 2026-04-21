@@ -12,7 +12,7 @@ public class FFSine : FFLinear
         _offset = (float)Plugin.I.RNG.NextDouble();
     }
     
-    public override float Calculate(long ticks) 
+    public override float Calculate(long ticks, float currentPos) 
     {
         float t = GetElapsedSeconds(ticks);
         return Mathf.Sin(_offset + t * _frequency * 2 * Mathf.PI) * _force;

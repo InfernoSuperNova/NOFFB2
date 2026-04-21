@@ -6,8 +6,8 @@ public class FFDecaying : FFLinear
     {
     }
 
-    public override float Calculate(long elapsed)
+    public override float Calculate(long elapsed, float currentPos)
     {
-        return base.Calculate(elapsed) * (1 - GetNormalizedTime(elapsed));
+        return base.Calculate(elapsed, currentPos) * (1 - GetNormalizedTime(elapsed));
     }
 }

@@ -14,15 +14,19 @@ namespace NOFFB2;
 /// </summary>
 public class FFServer
 {
+    private const int TargetUpdateHz = 250;
+    private static readonly long TargetUpdateTicks = Stopwatch.Frequency / TargetUpdateHz;
+
     private volatile bool _running = true;
     private readonly object _effectListLock = new();
     private readonly Dictionary<FFAxis, List<FFEffect>> _activeEffects = new();
     private readonly Dictionary<FFAxis, float> _toApplyForces = new();
+    private readonly Dictionary<FFAxis, float> _currentPositions = new();
     private readonly Stopwatch _sw;
 
     private DirectInputDeviceContext _deviceContext;
-    private Effect _constantForceEffect;
-    private Vector2 _lastAppliedVector = new(float.NaN, float.NaN);
+    private readonly Dictionary<FFAxis, Effect> _constantForceEffects = new();
+    private readonly Dictionary<FFAxis, float> _lastAppliedForces = new();
     private Thread _workerThread;
 
     public FFServer()
@@ -34,10 +38,24 @@ public class FFServer
         {
             _activeEffects[axis] = new List<FFEffect>();
             _toApplyForces[axis] = 0f;
+            _currentPositions[axis] = 0f;
+            _lastAppliedForces[axis] = float.NaN;
         }
     }
 
     public static FFServer I { get; private set; }
+
+    public bool TryGetAxisDebugSnapshot(out string snapshot)
+    {
+        snapshot = null;
+        if (_deviceContext == null || !_deviceContext.TryGetAxisDebugSnapshot(out var rawSnapshot))
+        {
+            return false;
+        }
+
+        snapshot = rawSnapshot.ToString();
+        return true;
+    }
 
     /// <summary>
     /// Thread safe to be called by Unity.
@@ -73,7 +91,7 @@ public class FFServer
         _deviceContext = DirectInputDeviceContext.TryCreate();
         if (_deviceContext != null)
         {
-            TryCreateConstantForceEffect();
+            TryCreateConstantForceEffects();
         }
 
         _workerThread = new Thread(WorkerLoop)
@@ -105,14 +123,40 @@ public class FFServer
 
     private void WorkerLoop()
     {
+        long nextTick = Stopwatch.GetTimestamp();
+
         while (_running)
         {
             ProcessOutput();
-            Thread.Sleep(1);
+
+            nextTick += TargetUpdateTicks;
+            long now = Stopwatch.GetTimestamp();
+            long remainingTicks = nextTick - now;
+
+            if (remainingTicks <= 0)
+            {
+                if (-remainingTicks > TargetUpdateTicks * 4)
+                {
+                    nextTick = now;
+                }
+
+                continue;
+            }
+
+            int sleepMilliseconds = (int)(remainingTicks * 1000 / Stopwatch.Frequency);
+            if (sleepMilliseconds > 1)
+            {
+                Thread.Sleep(sleepMilliseconds - 1);
+            }
+
+            while (_running && Stopwatch.GetTimestamp() < nextTick)
+            {
+                Thread.SpinWait(32);
+            }
         }
     }
 
-    private bool TryCreateConstantForceEffect()
+    private bool TryCreateConstantForceEffects()
     {
         if (_deviceContext == null)
         {
@@ -129,21 +173,27 @@ public class FFServer
 
         try
         {
-            var parameters = CreateConstantForceParameters(
-                new[] { rollBinding.EffectAxes[0], pitchBinding.EffectAxes[0] },
-                new[] { 0, 0 },
-                0);
-            _constantForceEffect = new Effect(_deviceContext.Device, EffectGuid.ConstantForce, parameters);
-            _constantForceEffect.Download();
-            _constantForceEffect.Start(-1);
-            _lastAppliedVector = Vector2.zero;
+            foreach (FFAxis axis in Enum.GetValues(typeof(FFAxis)))
+            {
+                var effect = new Effect(
+                    _deviceContext.Device,
+                    EffectGuid.ConstantForce,
+                    CreateConstantForceParameters(
+                        new[] { rollBinding.EffectAxes[0], pitchBinding.EffectAxes[0] },
+                        new[] { 0, 0 },
+                        0));
+                effect.Download();
+                effect.Start(-1);
+                _constantForceEffects[axis] = effect;
+                _lastAppliedForces[axis] = 0f;
+                Plugin.Logger?.LogInfo($"Created independent DirectInput constant-force vector effect for {axis} on `{_deviceContext.DeviceName}`.");
+            }
 
-            Plugin.Logger?.LogInfo($"Created shared DirectInput 2-axis constant-force effect on `{_deviceContext.DeviceName}`.");
             return true;
         }
         catch (Exception ex)
         {
-            Plugin.Logger?.LogWarning($"Failed to create DirectInput constant-force effect: {ex.Message}");
+            Plugin.Logger?.LogWarning($"Failed to create DirectInput constant-force effects: {ex.Message}");
             DisposeEffects();
             return false;
         }
@@ -163,7 +213,7 @@ public class FFServer
             Axes = axes,
             Directions = directions,
             Envelope = null,
-            Parameters = new ConstantForce { Magnitude = magnitude }
+            Parameters = new SharpDX.DirectInput.ConstantForce { Magnitude = magnitude }
         };
     }
 
@@ -296,7 +346,7 @@ public class FFServer
                 Axes = new[] { rollBinding.EffectAxes[0], pitchBinding.EffectAxes[0] },
                 Directions = directions,
                 Envelope = null,
-                Parameters = new ConstantForce { Magnitude = magnitude }
+                Parameters = new SharpDX.DirectInput.ConstantForce { Magnitude = magnitude }
             });
 
             effect.Download();
@@ -342,32 +392,34 @@ public class FFServer
 
     private void DisposeEffects()
     {
-        if (_constantForceEffect == null)
+        foreach (var effect in _constantForceEffects.Values)
         {
-            return;
+            try
+            {
+                effect.Stop();
+            }
+            catch
+            {
+                // ignored during shutdown
+            }
+
+            try
+            {
+                effect.Unload();
+            }
+            catch
+            {
+                // ignored during shutdown
+            }
+
+            effect.Dispose();
         }
 
-        try
+        _constantForceEffects.Clear();
+        foreach (FFAxis axis in Enum.GetValues(typeof(FFAxis)))
         {
-            _constantForceEffect.Stop();
+            _lastAppliedForces[axis] = float.NaN;
         }
-        catch
-        {
-            // ignored during shutdown
-        }
-
-        try
-        {
-            _constantForceEffect.Unload();
-        }
-        catch
-        {
-            // ignored during shutdown
-        }
-
-        _constantForceEffect.Dispose();
-        _constantForceEffect = null;
-        _lastAppliedVector = new Vector2(float.NaN, float.NaN);
     }
 
     private void ProcessOutput()
@@ -380,6 +432,12 @@ public class FFServer
                 var axis = kvp.Key;
                 _toApplyForces[axis] = 0f;
                 var effects = kvp.Value;
+                if (_deviceContext != null && _deviceContext.TryGetAxisPosition(axis, out var currentPos))
+                {
+                    _currentPositions[axis] = currentPos;
+                }
+
+                float currentPosition = _currentPositions[axis];
                 for (var index = effects.Count - 1; index >= 0; index--)
                 {
                     var effect = effects[index];
@@ -389,7 +447,7 @@ public class FFServer
                         continue;
                     }
 
-                    _toApplyForces[axis] += effect.Calculate(time);
+                    _toApplyForces[axis] += effect.Calculate(time, currentPosition);
                 }
             }
         }
@@ -399,51 +457,45 @@ public class FFServer
 
     private void ApplyForces(IReadOnlyDictionary<FFAxis, float> forces)
     {
-        if (_deviceContext == null || _constantForceEffect == null)
+        if (_deviceContext == null || _constantForceEffects.Count == 0)
         {
             return;
         }
 
-        var rollForce = Mathf.Clamp(forces.TryGetValue(FFAxis.Roll, out var roll) ? roll : 0f, -1f, 1f);
-        var pitchForce = Mathf.Clamp(forces.TryGetValue(FFAxis.Pitch, out var pitch) ? pitch : 0f, -1f, 1f);
-        var vector = new Vector2(rollForce, pitchForce);
-
-        if (!float.IsNaN(_lastAppliedVector.x) &&
-            !float.IsNaN(_lastAppliedVector.y) &&
-            Mathf.Abs(vector.x - _lastAppliedVector.x) < 0.001f &&
-            Mathf.Abs(vector.y - _lastAppliedVector.y) < 0.001f)
+        foreach (FFAxis axis in Enum.GetValues(typeof(FFAxis)))
         {
-            return;
-        }
-
-        var magnitude = Mathf.RoundToInt(Mathf.Clamp01(vector.magnitude) * 10_000f);
-        var directions = magnitude == 0
-            ? new[] { 0, 0 }
-            : new[]
-            {
-                Mathf.RoundToInt(vector.normalized.x * 10_000f),
-                Mathf.RoundToInt(vector.normalized.y * 10_000f)
-            };
-
-        try
-        {
-            if (!_deviceContext.TryGetAxisBinding(FFAxis.Roll, out var rollBinding) ||
+            if (!_constantForceEffects.TryGetValue(axis, out var effect) ||
+                !_deviceContext.TryGetAxisBinding(FFAxis.Roll, out var rollBinding) ||
                 !_deviceContext.TryGetAxisBinding(FFAxis.Pitch, out var pitchBinding))
             {
-                return;
+                continue;
             }
 
-            _constantForceEffect.SetParameters(
-                CreateConstantForceParameters(
-                    new[] { rollBinding.EffectAxes[0], pitchBinding.EffectAxes[0] },
-                    directions,
-                    magnitude),
-                EffectParameterFlags.TypeSpecificParameters | EffectParameterFlags.Direction);
-            _lastAppliedVector = vector;
-        }
-        catch (Exception ex)
-        {
-            Log($"Failed to update DirectInput constant force on `{_deviceContext.DeviceName}` vector [{vector.x:F3}, {vector.y:F3}]: {ex.Message}", LogLevel.Warning);
+            float force = Mathf.Clamp(forces.TryGetValue(axis, out var value) ? value : 0f, -1f, 1f);
+            if (!float.IsNaN(_lastAppliedForces[axis]) && Mathf.Abs(force - _lastAppliedForces[axis]) < 0.001f)
+            {
+                continue;
+            }
+
+            int magnitude = Mathf.RoundToInt(Mathf.Abs(force) * 10_000f);
+            int[] directions = axis == FFAxis.Roll
+                ? new[] { force >= 0f ? 10_000 : -10_000, 0 }
+                : new[] { 0, force >= 0f ? 10_000 : -10_000 };
+
+            try
+            {
+                effect.SetParameters(
+                    CreateConstantForceParameters(
+                        new[] { rollBinding.EffectAxes[0], pitchBinding.EffectAxes[0] },
+                        directions,
+                        magnitude),
+                    EffectParameterFlags.TypeSpecificParameters | EffectParameterFlags.Direction);
+                _lastAppliedForces[axis] = force;
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to update DirectInput constant force on `{_deviceContext.DeviceName}` axis {axis} force {force:F3}: {ex.Message}", LogLevel.Warning);
+            }
         }
     }
 
